@@ -16,6 +16,7 @@
 
 pub mod app;
 pub mod dialogs;
+pub mod panes;
 pub mod theme;
 
 pub use app::run_tui;
