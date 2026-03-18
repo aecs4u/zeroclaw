@@ -98,8 +98,7 @@ impl App {
     pub fn handle_key(&mut self, key: KeyEvent) -> bool {
         match (key.code, key.modifiers) {
             // Quit
-            (KeyCode::Char('q') | KeyCode::Char('Q'), _)
-            | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
+            (KeyCode::Char('q' | 'Q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
                 self.should_quit = true;
                 true
             }

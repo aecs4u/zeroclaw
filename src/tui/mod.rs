@@ -15,6 +15,7 @@
 //! available colour themes.
 
 pub mod app;
+pub mod dialogs;
 pub mod theme;
 
 pub use app::run_tui;
