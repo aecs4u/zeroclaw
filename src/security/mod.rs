@@ -24,8 +24,9 @@ pub mod bubblewrap;
 pub mod detect;
 pub mod docker;
 
-// Prompt injection defense (contributed from RustyClaw, MIT licensed)
+// SSRF protection and prompt injection defense (contributed from RustyClaw, MIT licensed)
 pub mod domain_matcher;
+pub mod ssrf;
 pub mod estop;
 #[cfg(target_os = "linux")]
 pub mod firejail;
@@ -49,6 +50,8 @@ pub use audit::{AuditEvent, AuditEventType, AuditLogger};
 #[allow(unused_imports)]
 pub use detect::create_sandbox;
 pub use domain_matcher::DomainMatcher;
+#[allow(unused_imports)]
+pub use ssrf::SsrfValidator;
 #[allow(unused_imports)]
 pub use estop::{EstopLevel, EstopManager, EstopState, ResumeSelector};
 #[allow(unused_imports)]
