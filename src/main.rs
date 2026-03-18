@@ -100,6 +100,8 @@ mod peripherals;
 #[cfg(feature = "plugins-wasm")]
 mod plugins;
 mod providers;
+#[cfg(feature = "tui")]
+mod tui;
 mod runtime;
 mod security;
 mod service;
@@ -536,6 +538,24 @@ Examples:
     Plugin {
         #[command(subcommand)]
         plugin_command: PluginCommands,
+    },
+
+    /// Open the terminal dashboard UI
+    #[cfg(feature = "tui")]
+    #[command(long_about = "\
+Open the ZeroClaw terminal dashboard.
+
+Displays a split-pane terminal UI with a status overview and scrolling \
+log pane. Navigate between panes with Tab/Shift-Tab. Press q or Ctrl-C \
+to quit.
+
+Examples:
+  zeroclaw tui
+  zeroclaw tui --theme light")]
+    Tui {
+        /// Colour theme (`dark` or `light`)
+        #[arg(long, default_value = "dark")]
+        theme: String,
     },
 }
 
@@ -1356,6 +1376,16 @@ async fn main() -> Result<()> {
                 Ok(())
             }
         },
+
+        #[cfg(feature = "tui")]
+        Commands::Tui { theme } => {
+            let variant = match theme.to_ascii_lowercase().as_str() {
+                "light" => tui::theme::ThemeVariant::Light,
+                _ => tui::theme::ThemeVariant::Dark,
+            };
+            tui::app::run_tui(&config, variant)?;
+            Ok(())
+        }
 
         #[cfg(feature = "plugins-wasm")]
         Commands::Plugin { plugin_command } => match plugin_command {
