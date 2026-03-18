@@ -15,7 +15,8 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use zeroclaw::nodes::mdns::{MdnsPeer, MdnsConfig, run_peer_discovery};
+//! use zeroclaw::nodes::mdns::{MdnsPeer, run_peer_discovery};
+//! use zeroclaw::config::MdnsConfig;
 //! use std::sync::{Arc, Mutex};
 //! use std::collections::HashMap;
 //!
@@ -38,10 +39,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyhow::Result;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::net::UdpSocket;
 use tokio::time::Duration;
+
+// Re-export the canonical MdnsConfig from the config schema.
+pub use crate::config::MdnsConfig;
 
 /// IPv4 mDNS multicast group address (RFC 6762).
 const MDNS_GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
@@ -51,56 +54,6 @@ const PEER_PORT: u16 = 35_353;
 
 /// Maximum UDP datagram size we accept.
 const MAX_DATAGRAM: usize = 2_048;
-
-// ── Config ────────────────────────────────────────────────────────────────────
-
-/// Configuration for the mDNS peer-discovery subsystem.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct MdnsConfig {
-    /// Whether mDNS peer discovery is active.
-    #[serde(default)]
-    pub enabled: bool,
-
-    /// Human-readable name advertised to peers (defaults to system hostname).
-    #[serde(default)]
-    pub node_name: Option<String>,
-
-    /// Gateway port advertised to peers.
-    #[serde(default = "MdnsConfig::default_port")]
-    pub port: u16,
-
-    /// How often (seconds) to re-broadcast a presence announcement.
-    #[serde(default = "MdnsConfig::default_announce_interval_secs")]
-    pub announce_interval_secs: u64,
-
-    /// Seconds after the last announcement before a peer is evicted.
-    #[serde(default = "MdnsConfig::default_peer_ttl_secs")]
-    pub peer_ttl_secs: u64,
-}
-
-impl MdnsConfig {
-    fn default_port() -> u16 {
-        3_000
-    }
-    fn default_announce_interval_secs() -> u64 {
-        30
-    }
-    fn default_peer_ttl_secs() -> u64 {
-        90
-    }
-}
-
-impl Default for MdnsConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            node_name: None,
-            port: Self::default_port(),
-            announce_interval_secs: Self::default_announce_interval_secs(),
-            peer_ttl_secs: Self::default_peer_ttl_secs(),
-        }
-    }
-}
 
 // ── Wire format ───────────────────────────────────────────────────────────────
 

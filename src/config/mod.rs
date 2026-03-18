@@ -17,7 +17,7 @@ pub use schema::{
     ImageProviderImagenConfig, ImageProviderStabilityConfig, KnowledgeConfig, LarkConfig,
     LinkedInConfig, LinkedInContentConfig, LinkedInImageConfig, MatrixConfig, McpConfig,
     McpServerConfig, McpTransport, MemoryConfig, Microsoft365Config, ModelRouteConfig,
-    MultimodalConfig, NextcloudTalkConfig, NodeTransportConfig, NodesConfig, NotionConfig,
+    MdnsConfig, MultimodalConfig, NextcloudTalkConfig, NodeTransportConfig, NodesConfig, NotionConfig,
     ObservabilityConfig, OpenAiSttConfig, OpenAiTtsConfig, OpenVpnTunnelConfig, OtpConfig,
     OtpMethod, PeripheralBoardConfig, PeripheralsConfig, PluginsConfig, ProjectIntelConfig,
     ProxyConfig, ProxyScope, QdrantConfig, QueryClassificationConfig, ReliabilityConfig,

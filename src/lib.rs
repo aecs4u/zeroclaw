@@ -74,6 +74,9 @@ pub(crate) mod tunnel;
 pub(crate) mod util;
 pub mod voice;
 
+#[cfg(feature = "tui")]
+pub mod tui;
+
 #[cfg(feature = "plugins-wasm")]
 pub mod plugins;
 

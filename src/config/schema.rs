@@ -801,6 +801,44 @@ impl Default for McpConfig {
 
 // ── Nodes (Dynamic Node Discovery) ───────────────────────────────
 
+/// Configuration for mDNS local peer discovery (`[nodes.mdns]`).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct MdnsConfig {
+    /// Whether mDNS peer discovery is active.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Human-readable name advertised to peers (defaults to system hostname).
+    #[serde(default)]
+    pub node_name: Option<String>,
+    /// Gateway port advertised to peers.
+    #[serde(default = "MdnsConfig::default_port")]
+    pub port: u16,
+    /// How often (seconds) to re-broadcast a presence announcement.
+    #[serde(default = "MdnsConfig::default_announce_interval_secs")]
+    pub announce_interval_secs: u64,
+    /// Seconds after the last announcement before a peer is evicted.
+    #[serde(default = "MdnsConfig::default_peer_ttl_secs")]
+    pub peer_ttl_secs: u64,
+}
+
+impl MdnsConfig {
+    fn default_port() -> u16 { 3_000 }
+    fn default_announce_interval_secs() -> u64 { 30 }
+    fn default_peer_ttl_secs() -> u64 { 90 }
+}
+
+impl Default for MdnsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            node_name: None,
+            port: Self::default_port(),
+            announce_interval_secs: Self::default_announce_interval_secs(),
+            peer_ttl_secs: Self::default_peer_ttl_secs(),
+        }
+    }
+}
+
 /// Configuration for the dynamic node discovery system (`[nodes]`).
 ///
 /// When enabled, external processes/devices can connect via WebSocket
@@ -818,7 +856,7 @@ pub struct NodesConfig {
     pub auth_token: Option<String>,
     /// mDNS local peer discovery.
     #[serde(default)]
-    pub mdns: crate::nodes::MdnsConfig,
+    pub mdns: MdnsConfig,
 }
 
 fn default_max_nodes() -> usize {
@@ -831,7 +869,7 @@ impl Default for NodesConfig {
             enabled: false,
             max_nodes: default_max_nodes(),
             auth_token: None,
-            mdns: crate::nodes::MdnsConfig::default(),
+            mdns: MdnsConfig::default(),
         }
     }
 }
