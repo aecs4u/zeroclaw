@@ -15,6 +15,7 @@
 //! [`start_channels`]. See `AGENTS.md` §7.2 for the full change playbook.
 
 pub mod bluesky;
+pub mod chunker;
 pub mod clawdtalk;
 pub mod cli;
 pub mod dingtalk;
