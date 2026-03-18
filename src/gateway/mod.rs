@@ -11,6 +11,7 @@ pub mod api;
 pub mod api_pairing;
 #[cfg(feature = "plugins-wasm")]
 pub mod api_plugins;
+pub mod csrf;
 pub mod nodes;
 pub mod sse;
 pub mod static_files;
@@ -341,6 +342,8 @@ pub struct AppState {
     pub device_registry: Option<Arc<api_pairing::DeviceRegistry>>,
     /// Pending pairing request store
     pub pending_pairings: Option<Arc<api_pairing::PairingStore>>,
+    /// CSRF protection (token generation + validation for web dashboard)
+    pub csrf: Arc<csrf::CsrfProtection>,
 }
 
 /// Run the HTTP gateway using axum with proper HTTP/1.1 compliance.
@@ -734,6 +737,7 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
         session_backend,
         device_registry,
         pending_pairings,
+        csrf: Arc::new(csrf::CsrfProtection::new()),
     };
 
     // Config PUT needs larger body limit (1MB)
@@ -778,6 +782,7 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
         .route("/api/memory", get(api::handle_api_memory_list))
         .route("/api/memory", post(api::handle_api_memory_store))
         .route("/api/memory/{key}", delete(api::handle_api_memory_delete))
+        .route("/api/csrf-token", get(handle_csrf_token))
         .route("/api/cost", get(api::handle_api_cost))
         .route("/api/cli-tools", get(api::handle_api_cli_tools))
         .route("/api/health", get(api::handle_api_health))
@@ -837,6 +842,56 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
 // ══════════════════════════════════════════════════════════════════════════════
 // AXUM HANDLERS
 // ══════════════════════════════════════════════════════════════════════════════
+
+/// GET /api/csrf-token — issue a new CSRF token for the web dashboard.
+///
+/// The token must be included as the `X-CSRF-Token` header on all
+/// state-mutating API requests (`POST`, `PUT`, `DELETE`, `PATCH`).
+/// Webhook ingress paths and WebSocket upgrades are exempt.
+async fn handle_csrf_token(State(state): State<AppState>) -> impl IntoResponse {
+    let token = state.csrf.issue_token();
+    Json(serde_json::json!({ "csrf_token": token }))
+}
+
+/// Validate a CSRF token from request headers for state-mutating endpoints.
+///
+/// Returns `Ok(())` when:
+/// - The HTTP method is safe (GET / HEAD / OPTIONS), or
+/// - The request path is exempt (webhooks, WS), or
+/// - A valid `X-CSRF-Token` header is present.
+///
+/// Returns `Err(StatusCode::FORBIDDEN)` when the token is absent or invalid.
+pub fn check_csrf(
+    method: &axum::http::Method,
+    path: &str,
+    headers: &HeaderMap,
+    csrf: &csrf::CsrfProtection,
+) -> Result<(), StatusCode> {
+    use axum::http::Method;
+
+    // Safe methods don't need CSRF protection.
+    if matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS) {
+        return Ok(());
+    }
+
+    // Exempt paths (webhooks with HMAC, pairing, monitoring).
+    if csrf::CsrfProtection::is_exempt_path(path) {
+        return Ok(());
+    }
+
+    // Validate the X-CSRF-Token header.
+    let token = headers
+        .get("x-csrf-token")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if csrf.validate_token(token) {
+        Ok(())
+    } else {
+        tracing::warn!(path, "CSRF validation failed: missing or invalid X-CSRF-Token");
+        Err(StatusCode::FORBIDDEN)
+    }
+}
 
 /// GET /health — always public (no secrets leaked)
 async fn handle_health(State(state): State<AppState>) -> impl IntoResponse {
@@ -1906,6 +1961,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let response = handle_metrics(State(state)).await.into_response();
@@ -1961,6 +2017,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let response = handle_metrics(State(state)).await.into_response();
@@ -2340,6 +2397,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let mut headers = HeaderMap::new();
@@ -2409,6 +2467,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let headers = HeaderMap::new();
@@ -2490,6 +2549,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let response = handle_webhook(
@@ -2543,6 +2603,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let mut headers = HeaderMap::new();
@@ -2601,6 +2662,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let mut headers = HeaderMap::new();
@@ -2664,6 +2726,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let response = Box::pin(handle_nextcloud_talk_webhook(
@@ -2723,6 +2786,7 @@ mod tests {
             session_backend: None,
             device_registry: None,
             pending_pairings: None,
+                csrf: Arc::new(csrf::CsrfProtection::new()),
         };
 
         let mut headers = HeaderMap::new();
