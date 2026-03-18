@@ -24,8 +24,9 @@ pub mod bubblewrap;
 pub mod detect;
 pub mod docker;
 
-// SSRF protection and prompt injection defense (contributed from RustyClaw, MIT licensed)
+// SSRF protection, prompt injection defense, and unified safety layer (contributed from RustyClaw, MIT licensed)
 pub mod domain_matcher;
+pub mod safety_layer;
 pub mod ssrf;
 pub mod estop;
 #[cfg(target_os = "linux")]
@@ -50,6 +51,8 @@ pub use audit::{AuditEvent, AuditEventType, AuditLogger};
 #[allow(unused_imports)]
 pub use detect::create_sandbox;
 pub use domain_matcher::DomainMatcher;
+#[allow(unused_imports)]
+pub use safety_layer::{DefenseCategory, DefenseResult, PolicyAction, SafetyConfig, SafetyLayer};
 #[allow(unused_imports)]
 pub use ssrf::SsrfValidator;
 #[allow(unused_imports)]
