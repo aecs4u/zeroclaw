@@ -209,7 +209,9 @@ pub async fn run_peer_discovery(config: MdnsConfig, registry: PeerRegistry) -> R
 /// Send a [`PeerPacket::Bye`] announcement so peers remove this node promptly.
 pub async fn send_goodbye(node_name: &str) {
     if let Ok(socket) = bind_multicast_socket() {
-        let packet = PeerPacket::Bye(Bye { name: node_name.to_string() });
+        let packet = PeerPacket::Bye(Bye {
+            name: node_name.to_string(),
+        });
         if let Ok(payload) = serde_json::to_vec(&packet) {
             let dest = SocketAddrV4::new(MDNS_GROUP, PEER_PORT);
             let _ = socket.send_to(&payload, dest).await;
@@ -268,12 +270,7 @@ async fn broadcast_announcement(socket: &UdpSocket, name: &str, port: u16) {
     }
 }
 
-fn handle_datagram(
-    data: &[u8],
-    src_ip: &str,
-    registry: &PeerRegistry,
-    own_name: &str,
-) {
+fn handle_datagram(data: &[u8], src_ip: &str, registry: &PeerRegistry, own_name: &str) {
     let packet: PeerPacket = match serde_json::from_slice(data) {
         Ok(p) => p,
         Err(_) => return, // not a ZeroClaw packet
@@ -445,7 +442,9 @@ mod tests {
             },
         );
         // Send goodbye
-        let packet = PeerPacket::Bye(Bye { name: "peer-b".into() });
+        let packet = PeerPacket::Bye(Bye {
+            name: "peer-b".into(),
+        });
         let data = serde_json::to_vec(&packet).unwrap();
         handle_datagram(&data, "10.0.0.2", &registry, "me");
         assert!(
