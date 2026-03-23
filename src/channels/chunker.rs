@@ -109,7 +109,10 @@ pub fn chunk_message(text: &str, max_chars: usize) -> Vec<String> {
 
         let (chunk, rest) = match break_byte {
             Some(b) => (&remaining[..b], remaining[b..].trim_start()),
-            None => (&remaining[..split_byte], remaining[split_byte..].trim_start()),
+            None => (
+                &remaining[..split_byte],
+                remaining[split_byte..].trim_start(),
+            ),
         };
 
         let chunk = chunk.trim();
