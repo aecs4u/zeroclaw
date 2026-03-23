@@ -150,10 +150,7 @@ impl CompactionEngine {
     /// Compact `messages` with the configured strategy.
     ///
     /// If compaction is not needed, returns the input unchanged.
-    pub fn compact(
-        &self,
-        messages: Vec<ChatMessage>,
-    ) -> (Vec<ChatMessage>, CompactionResult) {
+    pub fn compact(&self, messages: Vec<ChatMessage>) -> (Vec<ChatMessage>, CompactionResult) {
         let before = messages.len();
 
         if !self.should_compact(before) {
@@ -213,7 +210,10 @@ impl CompactionEngine {
     fn importance(&self, messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
         let total = messages.len();
         let keep_initial = self.config.keep_initial.min(total);
-        let keep_recent = self.config.keep_recent.min(total.saturating_sub(keep_initial));
+        let keep_recent = self
+            .config
+            .keep_recent
+            .min(total.saturating_sub(keep_initial));
         let recent_start = total.saturating_sub(keep_recent);
         // Target: keep at most ~67 % of max_messages from the middle.
         let target = self.config.max_messages.max(1) * 2 / 3;
@@ -273,8 +273,17 @@ impl CompactionEngine {
 
         // Keyword bonus.
         const KEYWORDS: &[&str] = &[
-            "error", "warning", "critical", "fix", "bug", "todo", "action",
-            "decide", "confirm", "approve", "important",
+            "error",
+            "warning",
+            "critical",
+            "fix",
+            "bug",
+            "todo",
+            "action",
+            "decide",
+            "confirm",
+            "approve",
+            "important",
         ];
         let lower = msg.content.to_lowercase();
         if KEYWORDS.iter().any(|kw| lower.contains(kw)) {
@@ -371,9 +380,7 @@ mod tests {
         assert_eq!(out[1].content, input[1].content);
         // Last three messages must be preserved.
         let last3: Vec<_> = out.iter().rev().take(3).collect();
-        assert!(last3
-            .iter()
-            .any(|m| m.content == input[19].content));
+        assert!(last3.iter().any(|m| m.content == input[19].content));
     }
 
     // ── heuristic importance ──────────────────────────────────────────────────
