@@ -15,6 +15,7 @@ pub mod canvas;
 pub mod nodes;
 pub mod sse;
 pub mod static_files;
+pub mod tls;
 pub mod ws;
 
 use crate::channels::{
