@@ -26,8 +26,6 @@ pub mod docker;
 
 // SSRF protection, prompt injection defense, and unified safety layer (contributed from RustyClaw, MIT licensed)
 pub mod domain_matcher;
-pub mod safety_layer;
-pub mod ssrf;
 pub mod estop;
 #[cfg(target_os = "linux")]
 pub mod firejail;
@@ -41,7 +39,9 @@ pub mod pairing;
 pub mod playbook;
 pub mod policy;
 pub mod prompt_guard;
+pub mod safety_layer;
 pub mod secrets;
+pub mod ssrf;
 pub mod traits;
 pub mod vulnerability;
 pub mod workspace_boundary;
@@ -52,10 +52,6 @@ pub use audit::{AuditEvent, AuditEventType, AuditLogger};
 pub use detect::create_sandbox;
 pub use domain_matcher::DomainMatcher;
 #[allow(unused_imports)]
-pub use safety_layer::{DefenseCategory, DefenseResult, PolicyAction, SafetyConfig, SafetyLayer};
-#[allow(unused_imports)]
-pub use ssrf::SsrfValidator;
-#[allow(unused_imports)]
 pub use estop::{EstopLevel, EstopManager, EstopState, ResumeSelector};
 #[allow(unused_imports)]
 pub use otp::OtpValidator;
@@ -63,7 +59,11 @@ pub use otp::OtpValidator;
 pub use pairing::PairingGuard;
 pub use policy::{AutonomyLevel, SecurityPolicy};
 #[allow(unused_imports)]
+pub use safety_layer::{DefenseCategory, DefenseResult, PolicyAction, SafetyConfig, SafetyLayer};
+#[allow(unused_imports)]
 pub use secrets::SecretStore;
+#[allow(unused_imports)]
+pub use ssrf::SsrfValidator;
 #[allow(unused_imports)]
 pub use traits::{NoopSandbox, Sandbox};
 // Nevis IAM integration

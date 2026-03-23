@@ -170,7 +170,11 @@ impl SsrfValidator {
         }
 
         let port: u16 = if port_str.is_empty() {
-            if scheme == "https" { 443 } else { 80 }
+            if scheme == "https" {
+                443
+            } else {
+                80
+            }
         } else {
             port_str
                 .parse()
@@ -229,9 +233,7 @@ impl SsrfValidator {
     fn check_ip(&self, ip: &IpAddr) -> Result<(), String> {
         for range in &self.blocked_ranges {
             if range.contains(*ip) {
-                return Err(format!(
-                    "Blocked: {ip} matches restricted range {range}"
-                ));
+                return Err(format!("Blocked: {ip} matches restricted range {range}"));
             }
         }
         Ok(())
