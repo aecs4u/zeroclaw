@@ -890,6 +890,8 @@ pub async fn run_gateway(host: &str, port: u16, config: Config) -> Result<()> {
         .route("/api/health", get(api::handle_api_health))
         .route("/api/sessions", get(api::handle_api_sessions_list))
         .route("/api/sessions/{id}", delete(api::handle_api_session_delete).put(api::handle_api_session_rename))
+        .route("/api/sessions/{id}/messages", get(api::handle_api_session_messages))
+        .route("/api/sessions/search", get(api::handle_api_sessions_search))
         // ── Pairing + Device management API ──
         .route("/api/pairing/initiate", post(api_pairing::initiate_pairing))
         .route("/api/pair", post(api_pairing::submit_pairing_enhanced))

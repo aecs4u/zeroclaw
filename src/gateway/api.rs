@@ -2089,3 +2089,134 @@ mod tests {
         assert!(crate::cron::list_jobs(&config).unwrap().is_empty());
     }
 }
+
+// ── session replay / history ──────────────────────────────────────────
+
+/// Query parameters for the session messages endpoint.
+#[derive(Debug, Deserialize)]
+pub struct SessionMessagesQuery {
+    /// Maximum number of messages to return (default: all).
+    pub limit: Option<usize>,
+    /// Number of messages to skip from the start (default: 0).
+    pub offset: Option<usize>,
+    /// Filter by role (e.g. "user", "assistant").
+    pub role: Option<String>,
+}
+
+/// GET /api/sessions/{id}/messages — retrieve conversation history
+pub async fn handle_api_session_messages(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(params): Query<SessionMessagesQuery>,
+) -> impl IntoResponse {
+    if let Err(e) = require_auth(&state, &headers) {
+        return e.into_response();
+    }
+
+    let Some(ref backend) = state.session_backend else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Session persistence is disabled"})),
+        )
+            .into_response();
+    };
+
+    let session_key = format!("gw_{id}");
+    let all_messages = backend.load(&session_key);
+
+    if all_messages.is_empty() {
+        // Check if session exists at all
+        let sessions = backend.list_sessions();
+        if !sessions.contains(&session_key) {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Session not found"})),
+            )
+                .into_response();
+        }
+    }
+
+    // Apply role filter
+    let filtered: Vec<_> = if let Some(ref role) = params.role {
+        all_messages.iter().filter(|m| m.role == *role).collect()
+    } else {
+        all_messages.iter().collect()
+    };
+
+    // Apply offset and limit
+    let offset = params.offset.unwrap_or(0);
+    let total = filtered.len();
+    let page: Vec<serde_json::Value> = filtered
+        .into_iter()
+        .skip(offset)
+        .take(params.limit.unwrap_or(usize::MAX))
+        .enumerate()
+        .map(|(i, msg)| {
+            serde_json::json!({
+                "index": offset + i,
+                "role": msg.role,
+                "content": msg.content,
+            })
+        })
+        .collect();
+
+    // Include session name if available
+    let name = backend.get_session_name(&session_key).ok().flatten();
+
+    let mut response = serde_json::json!({
+        "session_id": id,
+        "total": total,
+        "offset": offset,
+        "count": page.len(),
+        "messages": page,
+    });
+    if let Some(name) = name {
+        response["name"] = serde_json::Value::String(name);
+    }
+
+    Json(response).into_response()
+}
+
+/// GET /api/sessions/search?q=keyword&limit=N — search sessions by content
+pub async fn handle_api_sessions_search(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    if let Err(e) = require_auth(&state, &headers) {
+        return e.into_response();
+    }
+
+    let Some(ref backend) = state.session_backend else {
+        return Json(serde_json::json!({
+            "sessions": [],
+            "message": "Session persistence is disabled"
+        }))
+        .into_response();
+    };
+
+    let keyword = params.get("q").cloned();
+    let limit = params.get("limit").and_then(|v| v.parse().ok());
+
+    let query = crate::channels::session_backend::SessionQuery { keyword, limit };
+    let results: Vec<serde_json::Value> = backend
+        .search(&query)
+        .into_iter()
+        .filter_map(|meta| {
+            let session_id = meta.key.strip_prefix("gw_")?;
+            let mut entry = serde_json::json!({
+                "session_id": session_id,
+                "created_at": meta.created_at.to_rfc3339(),
+                "last_activity": meta.last_activity.to_rfc3339(),
+                "message_count": meta.message_count,
+            });
+            if let Some(name) = meta.name {
+                entry["name"] = serde_json::Value::String(name);
+            }
+            Some(entry)
+        })
+        .collect();
+
+    Json(serde_json::json!({ "sessions": results })).into_response()
+}
