@@ -204,9 +204,11 @@ mod tests {
 
     #[test]
     fn platform_constants_are_sane() {
-        assert!(TELEGRAM_LIMIT > 0);
-        assert!(DISCORD_LIMIT > 0);
-        assert!(DISCORD_LIMIT < TELEGRAM_LIMIT);
-        assert!(IRC_LIMIT < DISCORD_LIMIT);
+        const {
+            assert!(TELEGRAM_LIMIT > 0);
+            assert!(DISCORD_LIMIT > 0);
+            assert!(DISCORD_LIMIT < TELEGRAM_LIMIT);
+            assert!(IRC_LIMIT < DISCORD_LIMIT);
+        }
     }
 }
