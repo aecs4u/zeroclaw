@@ -32,7 +32,9 @@ const SUPPORTED_PROXY_SERVICE_KEYS: &[&str] = &[
     "channel.qq",
     "channel.signal",
     "channel.slack",
+    "channel.teams",
     "channel.telegram",
+    "channel.twitch",
     "channel.wati",
     "channel.whatsapp",
     "tool.browser",
@@ -5885,6 +5887,12 @@ pub struct ChannelsConfig {
     pub reddit: Option<RedditConfig>,
     /// Bluesky channel configuration (AT Protocol).
     pub bluesky: Option<BlueskyConfig>,
+    /// Microsoft Teams channel configuration (Bot Framework / Webhook).
+    #[serde(default)]
+    pub teams: Option<TeamsConfig>,
+    /// Twitch channel configuration (IRC + Helix API).
+    #[serde(default)]
+    pub twitch: Option<TwitchConfig>,
     /// Voice wake word detection channel configuration.
     #[cfg(feature = "voice-wake")]
     pub voice_wake: Option<VoiceWakeConfig>,
@@ -6015,6 +6023,14 @@ impl ChannelsConfig {
                 Box::new(ConfigWrapper::new(self.bluesky.as_ref())),
                 self.bluesky.is_some(),
             ),
+            (
+                Box::new(ConfigWrapper::new(self.teams.as_ref())),
+                self.teams.is_some(),
+            ),
+            (
+                Box::new(ConfigWrapper::new(self.twitch.as_ref())),
+                self.twitch.is_some(),
+            ),
             #[cfg(feature = "voice-wake")]
             (
                 Box::new(ConfigWrapper::new(self.voice_wake.as_ref())),
@@ -6073,6 +6089,8 @@ impl Default for ChannelsConfig {
             clawdtalk: None,
             reddit: None,
             bluesky: None,
+            teams: None,
+            twitch: None,
             #[cfg(feature = "voice-wake")]
             voice_wake: None,
             message_timeout_secs: default_channel_message_timeout_secs(),
@@ -7360,6 +7378,48 @@ impl ChannelConfig for BlueskyConfig {
     }
     fn desc() -> &'static str {
         "AT Protocol"
+    }
+}
+
+/// Microsoft Teams channel configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct TeamsConfig {
+    pub bot_id: Option<String>,
+    pub bot_secret: Option<String>,
+    pub tenant_id: Option<String>,
+    pub webhook_url: Option<String>,
+    pub service_url: Option<String>,
+    pub conversation_id: Option<String>,
+    #[serde(default)]
+    pub allowed_users: Vec<String>,
+}
+
+impl ChannelConfig for TeamsConfig {
+    fn name() -> &'static str {
+        "Teams"
+    }
+    fn desc() -> &'static str {
+        "Microsoft Teams"
+    }
+}
+
+/// Twitch channel configuration (IRC + Helix API).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct TwitchConfig {
+    pub username: String,
+    pub oauth_token: String,
+    pub client_id: Option<String>,
+    pub channels: Vec<String>,
+    #[serde(default)]
+    pub allowed_users: Vec<String>,
+}
+
+impl ChannelConfig for TwitchConfig {
+    fn name() -> &'static str {
+        "Twitch"
+    }
+    fn desc() -> &'static str {
+        "Twitch IRC"
     }
 }
 
@@ -10918,6 +10978,8 @@ default_temperature = 0.7
                 clawdtalk: None,
                 reddit: None,
                 bluesky: None,
+                teams: None,
+                twitch: None,
                 #[cfg(feature = "voice-wake")]
                 voice_wake: None,
                 message_timeout_secs: 300,
@@ -11921,6 +11983,8 @@ allowed_users = ["@ops:matrix.org"]
             clawdtalk: None,
             reddit: None,
             bluesky: None,
+            teams: None,
+            twitch: None,
             #[cfg(feature = "voice-wake")]
             voice_wake: None,
             message_timeout_secs: 300,
@@ -12244,6 +12308,8 @@ channel_id = "C123"
             clawdtalk: None,
             reddit: None,
             bluesky: None,
+            teams: None,
+            twitch: None,
             #[cfg(feature = "voice-wake")]
             voice_wake: None,
             message_timeout_secs: 300,
