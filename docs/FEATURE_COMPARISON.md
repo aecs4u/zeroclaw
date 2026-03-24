@@ -177,7 +177,7 @@
 | Leak detection | ❌ | ✅ | ✅ | |
 | Encrypted secrets (ChaCha20) | ❌ | ✅ | ❌ | |
 | Encrypted secrets (AES-256-GCM) | ❌ | ❌ | ✅ | 🔄 Port from RustyClaw |
-| TOTP 2FA | ❌ | ❌ | ✅ | 🔄 Port from RustyClaw |
+| TOTP 2FA | ❌ | ✅ | ✅ | Already in `src/security/otp.rs` |
 | WebAuthn / hardware keys | ❌ | ❌ | ✅ | 🔄 Port from RustyClaw |
 | Device pairing | ✅ | ✅ | ✅ | |
 | OTP validation | ❌ | ✅ | ❌ | ZeroClaw-exclusive |
