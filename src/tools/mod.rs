@@ -160,7 +160,9 @@ pub use schedule::ScheduleTool;
 pub use schema::{CleaningStrategy, SchemaCleanr};
 pub use screenshot::ScreenshotTool;
 pub use security_ops::SecurityOpsTool;
-pub use sessions::{SessionsHistoryTool, SessionsListTool, SessionsSendTool};
+pub use sessions::{
+    SessionStatusTool, SessionsHistoryTool, SessionsListTool, SessionsSearchTool, SessionsSendTool,
+};
 pub use shell::ShellTool;
 #[allow(unused_imports)]
 pub use skill_http::SkillHttpTool;
@@ -671,7 +673,15 @@ pub fn all_tools_with_runtime(
             backend.clone(),
             security.clone(),
         )));
-        tool_arcs.push(Arc::new(SessionsSendTool::new(backend, security.clone())));
+        tool_arcs.push(Arc::new(SessionsSendTool::new(
+            backend.clone(),
+            security.clone(),
+        )));
+        tool_arcs.push(Arc::new(SessionStatusTool::new(
+            backend.clone(),
+            security.clone(),
+        )));
+        tool_arcs.push(Arc::new(SessionsSearchTool::new(backend, security.clone())));
     }
 
     // LinkedIn integration (config-gated)

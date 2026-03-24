@@ -571,3 +571,204 @@ mod tests {
             .contains(&json!("message")));
     }
 }
+
+// ── SessionStatusTool ──────────────────────────────────────────────
+
+/// Get detailed status of a specific session.
+pub struct SessionStatusTool {
+    backend: Arc<dyn SessionBackend>,
+    security: Arc<SecurityPolicy>,
+}
+
+impl SessionStatusTool {
+    pub fn new(backend: Arc<dyn SessionBackend>, security: Arc<SecurityPolicy>) -> Self {
+        Self { backend, security }
+    }
+}
+
+#[async_trait]
+impl Tool for SessionStatusTool {
+    fn name(&self) -> &str {
+        "session_status"
+    }
+
+    fn description(&self) -> &str {
+        "Get detailed status of a session: message count, timestamps, name, channel. Can also delete sessions."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "session_id": { "type": "string", "description": "Session ID to inspect" },
+                "delete": { "type": "boolean", "description": "Delete this session (default: false)" }
+            },
+            "required": ["session_id"]
+        })
+    }
+
+    async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
+        if let Err(error) = self
+            .security
+            .enforce_tool_operation(ToolOperation::Read, "session_status")
+        {
+            return Ok(ToolResult {
+                success: false,
+                output: String::new(),
+                error: Some(error),
+            });
+        }
+        let session_id = args
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing 'session_id' parameter"))?;
+        if let Err(result) = validate_session_id(session_id) {
+            return Ok(result);
+        }
+
+        if args
+            .get("delete")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            if let Err(error) = self
+                .security
+                .enforce_tool_operation(ToolOperation::Act, "session_status")
+            {
+                return Ok(ToolResult {
+                    success: false,
+                    output: String::new(),
+                    error: Some(error),
+                });
+            }
+            return match self.backend.delete_session(session_id) {
+                Ok(true) => Ok(ToolResult {
+                    success: true,
+                    output: format!("Session '{session_id}' deleted."),
+                    error: None,
+                }),
+                Ok(false) => Ok(ToolResult {
+                    success: false,
+                    output: String::new(),
+                    error: Some(format!("Session '{session_id}' not found.")),
+                }),
+                Err(e) => Ok(ToolResult {
+                    success: false,
+                    output: String::new(),
+                    error: Some(format!("Failed to delete: {e}")),
+                }),
+            };
+        }
+
+        let all_meta = self.backend.list_sessions_with_metadata();
+        let Some(meta) = all_meta.iter().find(|m| m.key == session_id) else {
+            return Ok(ToolResult {
+                success: false,
+                output: String::new(),
+                error: Some(format!("Session '{session_id}' not found.")),
+            });
+        };
+        let channel = session_id.split("__").next().unwrap_or("unknown");
+        let name = meta
+            .name
+            .as_deref()
+            .map_or(String::new(), |n| format!("\nName: {n}"));
+        Ok(ToolResult {
+            success: true,
+            output: format!("Session: {session_id}\nChannel: {channel}{name}\nMessages: {}\nCreated: {}\nLast activity: {}", meta.message_count, meta.created_at, meta.last_activity),
+            error: None,
+        })
+    }
+}
+
+// ── SessionsSearchTool ────────────────────────────────────────────
+
+/// Full-text search across session messages.
+pub struct SessionsSearchTool {
+    backend: Arc<dyn SessionBackend>,
+    security: Arc<SecurityPolicy>,
+}
+
+impl SessionsSearchTool {
+    pub fn new(backend: Arc<dyn SessionBackend>, security: Arc<SecurityPolicy>) -> Self {
+        Self { backend, security }
+    }
+}
+
+#[async_trait]
+impl Tool for SessionsSearchTool {
+    fn name(&self) -> &str {
+        "sessions_search"
+    }
+
+    fn description(&self) -> &str {
+        "Search across all session messages by keyword. Returns matching sessions with metadata."
+    }
+
+    fn parameters_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "Keyword to search for" },
+                "limit": { "type": "integer", "description": "Max results (default: 10)" }
+            },
+            "required": ["query"]
+        })
+    }
+
+    async fn execute(&self, args: serde_json::Value) -> anyhow::Result<ToolResult> {
+        if let Err(error) = self
+            .security
+            .enforce_tool_operation(ToolOperation::Read, "sessions_search")
+        {
+            return Ok(ToolResult {
+                success: false,
+                output: String::new(),
+                error: Some(error),
+            });
+        }
+        let query = args
+            .get("query")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing 'query' parameter"))?;
+        if query.trim().is_empty() {
+            return Ok(ToolResult {
+                success: false,
+                output: String::new(),
+                error: Some("Search query must not be empty.".into()),
+            });
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        let limit = args
+            .get("limit")
+            .and_then(serde_json::Value::as_u64)
+            .map_or(10, |v| v as usize);
+        let results = self
+            .backend
+            .search(&crate::channels::session_backend::SessionQuery {
+                keyword: Some(query.to_string()),
+                limit: Some(limit),
+            });
+        if results.is_empty() {
+            return Ok(ToolResult {
+                success: true,
+                output: format!("No sessions found matching '{query}'."),
+                error: None,
+            });
+        }
+        let mut output = format!("Found {} session(s) matching '{query}':\n", results.len());
+        for meta in &results {
+            let channel = meta.key.split("__").next().unwrap_or(&meta.key);
+            let _ = writeln!(
+                output,
+                "- {}: channel={}, messages={}, last_activity={}",
+                meta.key, channel, meta.message_count, meta.last_activity
+            );
+        }
+        Ok(ToolResult {
+            success: true,
+            output,
+            error: None,
+        })
+    }
+}
