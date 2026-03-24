@@ -100,6 +100,7 @@ pub mod swarm;
 pub mod text_browser;
 pub mod tool_search;
 pub mod traits;
+pub mod tts;
 pub mod verifiable_intent;
 pub mod weather_tool;
 pub mod web_fetch;
@@ -170,6 +171,7 @@ pub use notion_tool::NotionTool;
 pub use opencode_cli::OpenCodeCliTool;
 pub use pdf_read::PdfReadTool;
 pub use poll::{ChannelMapHandle, PollTool};
+pub use tts::TtsTool;
 pub use project_intel::ProjectIntelTool;
 pub use proxy_config::ProxyConfigTool;
 pub use pushover::PushoverTool;
@@ -721,6 +723,12 @@ pub fn all_tools_with_runtime(
 
     // PDF extraction (feature-gated at compile time via rag-pdf)
     tool_arcs.push(Arc::new(PdfReadTool::new(security.clone())));
+
+    // TTS tool — wraps the channel TTS subsystem as an agent-callable tool
+    tool_arcs.push(Arc::new(TtsTool::new(
+        root_config.tts.clone(),
+        workspace_dir.to_path_buf(),
+    )));
 
     // Vision tools are always available
     tool_arcs.push(Arc::new(ScreenshotTool::new(security.clone())));
