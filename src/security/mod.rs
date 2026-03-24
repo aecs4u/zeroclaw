@@ -41,9 +41,13 @@ pub mod path_validation;
 pub mod playbook;
 pub mod policy;
 pub mod prompt_guard;
+#[cfg(target_os = "macos")]
+pub mod seatbelt;
 pub mod secrets;
 pub mod traits;
 pub mod vulnerability;
+#[cfg(feature = "webauthn")]
+pub mod webauthn;
 pub mod workspace_boundary;
 
 #[allow(unused_imports)]

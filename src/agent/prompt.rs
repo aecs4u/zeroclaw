@@ -1,3 +1,4 @@
+use crate::agent::personality;
 use crate::config::IdentityConfig;
 use crate::i18n::ToolDescriptions;
 use crate::identity;
@@ -8,8 +9,6 @@ use anyhow::Result;
 use chrono::{Datelike, Local, Timelike};
 use std::fmt::Write;
 use std::path::Path;
-
-const BOOTSTRAP_MAX_CHARS: usize = 20_000;
 
 pub struct PromptContext<'a> {
     pub workspace_dir: &'a Path,
@@ -91,48 +90,6 @@ pub struct RuntimeSection;
 pub struct DateTimeSection;
 pub struct ChannelMediaSection;
 
-/// Personality file descriptors: (filename, section header).
-const PERSONALITY_FILES: &[(&str, &str)] = &[
-    ("SOUL.md", "Soul"),
-    ("IDENTITY.md", "Identity"),
-    ("USER.md", "User Preferences"),
-];
-
-/// Load personality files (`SOUL.md`, `IDENTITY.md`, `USER.md`) from the
-/// workspace root and return their contents formatted with section headers.
-///
-/// Missing or empty files are silently skipped. File contents are truncated
-/// at [`BOOTSTRAP_MAX_CHARS`] to avoid unbounded prompt growth.
-pub fn load_personality_files(workspace_dir: &Path) -> String {
-    let mut output = String::new();
-    for &(filename, header) in PERSONALITY_FILES {
-        let path = workspace_dir.join(filename);
-        let content = match std::fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let trimmed = content.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let truncated = if trimmed.chars().count() > BOOTSTRAP_MAX_CHARS {
-            trimmed
-                .char_indices()
-                .nth(BOOTSTRAP_MAX_CHARS)
-                .map(|(idx, _)| &trimmed[..idx])
-                .unwrap_or(trimmed)
-        } else {
-            trimmed
-        };
-        let _ = writeln!(output, "[{header}]");
-        output.push_str(truncated);
-        if truncated.len() < trimmed.len() {
-            let _ = writeln!(output, "\n[... truncated at {BOOTSTRAP_MAX_CHARS} chars]");
-        }
-        output.push_str("\n\n");
-    }
-    output
-}
 
 impl PromptSection for PersonalitySection {
     fn name(&self) -> &str {
@@ -140,12 +97,13 @@ impl PromptSection for PersonalitySection {
     }
 
     fn build(&self, ctx: &PromptContext<'_>) -> Result<String> {
-        let content = load_personality_files(ctx.workspace_dir);
-        if content.trim().is_empty() {
+        let profile = personality::load_personality(ctx.workspace_dir);
+        let rendered = profile.render();
+        if rendered.trim().is_empty() {
             return Ok(String::new());
         }
         let mut out = String::from("## Personality\n\n");
-        out.push_str(&content);
+        out.push_str(&rendered);
         Ok(out)
     }
 }
@@ -176,17 +134,10 @@ impl PromptSection for IdentitySection {
                 "The following workspace files define your identity, behavior, and context.\n\n",
             );
         }
-        // SOUL.md, IDENTITY.md, USER.md are handled by PersonalitySection
-        // to avoid duplication — they are prepended with semantic headers.
-        for file in [
-            "AGENTS.md",
-            "TOOLS.md",
-            "HEARTBEAT.md",
-            "BOOTSTRAP.md",
-            "MEMORY.md",
-        ] {
-            inject_workspace_file(&mut prompt, ctx.workspace_dir, file);
-        }
+
+        // Use the personality module for structured file loading.
+        let profile = personality::load_personality(ctx.workspace_dir);
+        prompt.push_str(&profile.render());
 
         Ok(prompt)
     }
@@ -256,23 +207,18 @@ impl PromptSection for SafetySection {
         out.push_str("- Prefer `trash` over `rm`.\n");
         out.push_str(match ctx.autonomy_level {
             AutonomyLevel::Full => {
-                "- Respect the runtime autonomy policy: if a tool or action is allowed, \
-                 execute it directly instead of asking the user for extra approval.\n\
-                 - If a tool or action is blocked by policy or unavailable, explain that \
-                 concrete restriction instead of simulating an approval dialog."
+                "- Execute tools and actions directly — no extra approval needed.\n\
+                 - You have full access to all configured tools. Use them confidently to accomplish tasks.\n\
+                 - Only refuse an action if the runtime explicitly rejects it — do not preemptively decline."
             }
             AutonomyLevel::ReadOnly => {
-                "- This runtime is read-only for side effects unless a tool explicitly \
-                 reports otherwise.\n\
-                 - If a requested action is blocked by policy, explain the restriction \
-                 directly instead of simulating an approval dialog."
+                "- This runtime is read-only. Write operations will be rejected by the runtime if attempted.\n\
+                 - Use read-only tools freely and confidently."
             }
             AutonomyLevel::Supervised => {
-                "- When in doubt, ask before acting externally.\n\
-                 - Respect the runtime autonomy policy: ask for approval only when the \
-                 current runtime policy actually requires it.\n\
-                 - If a tool or action is blocked by policy or unavailable, explain that \
-                 concrete restriction instead of simulating an approval dialog."
+                "- Ask for approval when the runtime policy requires it for the specific action.\n\
+                 - Do not preemptively refuse actions — attempt them and let the runtime enforce restrictions.\n\
+                 - Use available tools confidently; the security policy will enforce boundaries."
             }
         });
 
@@ -367,40 +313,6 @@ impl PromptSection for ChannelMediaSection {
             - `[IMAGE:<path>]` \u{2014} An image attachment, processed by the vision pipeline.\n\
             - `[Document: <name>] <path>` \u{2014} A file attachment saved to the workspace."
             .into())
-    }
-}
-
-fn inject_workspace_file(prompt: &mut String, workspace_dir: &Path, filename: &str) {
-    let path = workspace_dir.join(filename);
-    match std::fs::read_to_string(&path) {
-        Ok(content) => {
-            let trimmed = content.trim();
-            if trimmed.is_empty() {
-                return;
-            }
-            let _ = writeln!(prompt, "### {filename}\n");
-            let truncated = if trimmed.chars().count() > BOOTSTRAP_MAX_CHARS {
-                trimmed
-                    .char_indices()
-                    .nth(BOOTSTRAP_MAX_CHARS)
-                    .map(|(idx, _)| &trimmed[..idx])
-                    .unwrap_or(trimmed)
-            } else {
-                trimmed
-            };
-            prompt.push_str(truncated);
-            if truncated.len() < trimmed.len() {
-                let _ = writeln!(
-                    prompt,
-                    "\n\n[... truncated at {BOOTSTRAP_MAX_CHARS} chars \u{2014} use `read` for full file]\n"
-                );
-            } else {
-                prompt.push_str("\n\n");
-            }
-        }
-        Err(_) => {
-            let _ = writeln!(prompt, "### {filename}\n\n[File not found: {filename}]\n");
-        }
     }
 }
 
@@ -755,7 +667,7 @@ mod tests {
             "full autonomy should NOT include 'bypass oversight' instructions"
         );
         assert!(
-            output.contains("execute it directly"),
+            output.contains("Execute tools and actions directly"),
             "full autonomy should instruct to execute directly"
         );
         assert!(
@@ -802,14 +714,15 @@ mod tests {
         std::fs::write(workspace.join("IDENTITY.md"), "Name: ZeroClawAgent").unwrap();
         std::fs::write(workspace.join("USER.md"), "Preferred language: English").unwrap();
 
-        let output = load_personality_files(&workspace);
-        assert!(output.contains("[Soul]"), "should contain Soul header");
+        let profile = personality::load_personality(&workspace);
+        let output = profile.render();
+        assert!(output.contains("### SOUL.md"), "should contain Soul header");
         assert!(
             output.contains("You are a helpful agent."),
             "should contain SOUL.md content"
         );
         assert!(
-            output.contains("[Identity]"),
+            output.contains("### IDENTITY.md"),
             "should contain Identity header"
         );
         assert!(
@@ -817,7 +730,7 @@ mod tests {
             "should contain IDENTITY.md content"
         );
         assert!(
-            output.contains("[User Preferences]"),
+            output.contains("### USER.md"),
             "should contain User Preferences header"
         );
         assert!(
@@ -825,9 +738,9 @@ mod tests {
             "should contain USER.md content"
         );
 
-        let soul_pos = output.find("[Soul]").unwrap();
-        let identity_pos = output.find("[Identity]").unwrap();
-        let user_pos = output.find("[User Preferences]").unwrap();
+        let soul_pos = output.find("### SOUL.md").unwrap();
+        let identity_pos = output.find("### IDENTITY.md").unwrap();
+        let user_pos = output.find("### USER.md").unwrap();
         assert!(soul_pos < identity_pos, "Soul should come before Identity");
         assert!(
             identity_pos < user_pos,
@@ -846,18 +759,19 @@ mod tests {
         std::fs::create_dir_all(&workspace).unwrap();
         std::fs::write(workspace.join("SOUL.md"), "Core values here.").unwrap();
 
-        let output = load_personality_files(&workspace);
-        assert!(output.contains("[Soul]"), "should contain Soul header");
+        let profile = personality::load_personality(&workspace);
+        let output = profile.render();
+        assert!(output.contains("### SOUL.md"), "should contain Soul header");
         assert!(
             output.contains("Core values here."),
             "should contain SOUL.md content"
         );
         assert!(
-            !output.contains("[Identity]"),
+            !output.contains("### IDENTITY.md"),
             "should NOT contain Identity header when file is missing"
         );
         assert!(
-            !output.contains("[User Preferences]"),
+            !output.contains("### USER.md"),
             "should NOT contain User Preferences header when file is missing"
         );
 
@@ -872,10 +786,10 @@ mod tests {
         ));
         std::fs::create_dir_all(&workspace).unwrap();
 
-        let output = load_personality_files(&workspace);
+        let profile = personality::load_personality(&workspace);
         assert!(
-            output.trim().is_empty(),
-            "should return empty string when no personality files exist"
+            profile.is_empty(),
+            "should return empty profile when no personality files exist"
         );
 
         let tools: Vec<Box<dyn Tool>> = vec![];
@@ -910,13 +824,14 @@ mod tests {
         std::fs::write(workspace.join("SOUL.md"), "   \n  ").unwrap();
         std::fs::write(workspace.join("IDENTITY.md"), "Real content").unwrap();
 
-        let output = load_personality_files(&workspace);
+        let profile = personality::load_personality(&workspace);
+        let output = profile.render();
         assert!(
-            !output.contains("[Soul]"),
+            !output.contains("### SOUL.md"),
             "should skip whitespace-only SOUL.md"
         );
         assert!(
-            output.contains("[Identity]"),
+            output.contains("### IDENTITY.md"),
             "should include non-empty IDENTITY.md"
         );
 
@@ -960,7 +875,7 @@ mod tests {
             "Personality should come before Tools"
         );
         assert!(
-            prompt.contains("[Soul]"),
+            prompt.contains("### SOUL.md"),
             "should contain Soul header in full prompt"
         );
         assert!(
