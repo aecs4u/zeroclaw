@@ -149,7 +149,7 @@
 | Response caching | ❌ | ✅ | ❌ | ZeroClaw-exclusive |
 | Memory consolidation | ❌ | ✅ | ❌ | ZeroClaw-exclusive |
 | Memory decay | ❌ | ✅ | ❌ | ZeroClaw-exclusive |
-| Context compaction | ❌ | ❌ | ✅ | 🔄 Port from RustyClaw |
+| Context compaction | ❌ | ✅ (summarize) | ✅ (4 strategies) | ZeroClaw has basic; RustyClaw has sliding-window, importance, hybrid |
 | Local embeddings (fastembed) | ❌ | ✅ (vector) | ✅ | |
 | OpenAI embeddings | ✅ | ✅ | ✅ | |
 | Namespace isolation | ❌ | ✅ | ❌ | ZeroClaw-exclusive |
@@ -287,7 +287,7 @@
 | Heartbeat/health | ✅ | ✅ | ✅ | |
 | Hooks system | ✅ | ✅ | ✅ | |
 | Thinking levels | ✅ | ✅ | ❌ | |
-| Context compaction | ❌ | ❌ | ✅ | 🔄 Port from RustyClaw |
+| Context compaction | ❌ | ✅ (summarize) | ✅ (4 strategies) | ZeroClaw has basic; RustyClaw has sliding-window, importance, hybrid |
 | Personality files (SOUL.md) | ❌ | ❌ | ✅ | 🔄 Port from RustyClaw |
 | Service install (systemd/launchd) | ❌ | ❌ | ✅ | 🔄 Port from RustyClaw |
 
