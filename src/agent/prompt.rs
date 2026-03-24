@@ -47,6 +47,7 @@ impl SystemPromptBuilder {
     pub fn with_defaults() -> Self {
         Self {
             sections: vec![
+                Box::new(PersonalitySection),
                 Box::new(DateTimeSection),
                 Box::new(IdentitySection),
                 Box::new(ToolHonestySection),
@@ -79,6 +80,7 @@ impl SystemPromptBuilder {
     }
 }
 
+pub struct PersonalitySection;
 pub struct IdentitySection;
 pub struct ToolHonestySection;
 pub struct ToolsSection;
@@ -88,6 +90,65 @@ pub struct WorkspaceSection;
 pub struct RuntimeSection;
 pub struct DateTimeSection;
 pub struct ChannelMediaSection;
+
+/// Personality file descriptors: (filename, section header).
+const PERSONALITY_FILES: &[(&str, &str)] = &[
+    ("SOUL.md", "Soul"),
+    ("IDENTITY.md", "Identity"),
+    ("USER.md", "User Preferences"),
+];
+
+/// Load personality files (`SOUL.md`, `IDENTITY.md`, `USER.md`) from the
+/// workspace root and return their contents formatted with section headers.
+///
+/// Missing or empty files are silently skipped. File contents are truncated
+/// at [`BOOTSTRAP_MAX_CHARS`] to avoid unbounded prompt growth.
+pub fn load_personality_files(workspace_dir: &Path) -> String {
+    let mut output = String::new();
+    for &(filename, header) in PERSONALITY_FILES {
+        let path = workspace_dir.join(filename);
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let trimmed = content.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let truncated = if trimmed.chars().count() > BOOTSTRAP_MAX_CHARS {
+            trimmed
+                .char_indices()
+                .nth(BOOTSTRAP_MAX_CHARS)
+                .map(|(idx, _)| &trimmed[..idx])
+                .unwrap_or(trimmed)
+        } else {
+            trimmed
+        };
+        let _ = writeln!(output, "[{header}]");
+        output.push_str(truncated);
+        if truncated.len() < trimmed.len() {
+            let _ = writeln!(output, "\n[... truncated at {BOOTSTRAP_MAX_CHARS} chars]");
+        }
+        output.push_str("\n\n");
+    }
+    output
+}
+
+impl PromptSection for PersonalitySection {
+    fn name(&self) -> &str {
+        "personality"
+    }
+
+    fn build(&self, ctx: &PromptContext<'_>) -> Result<String> {
+        let content = load_personality_files(ctx.workspace_dir);
+        if content.trim().is_empty() {
+            return Ok(String::new());
+        }
+        let mut out = String::from("## Personality\n\n");
+        out.push_str(&content);
+        Ok(out)
+    }
+}
 
 impl PromptSection for IdentitySection {
     fn name(&self) -> &str {
@@ -115,12 +176,11 @@ impl PromptSection for IdentitySection {
                 "The following workspace files define your identity, behavior, and context.\n\n",
             );
         }
+        // SOUL.md, IDENTITY.md, USER.md are handled by PersonalitySection
+        // to avoid duplication — they are prepended with semantic headers.
         for file in [
             "AGENTS.md",
-            "SOUL.md",
             "TOOLS.md",
-            "IDENTITY.md",
-            "USER.md",
             "HEARTBEAT.md",
             "BOOTSTRAP.md",
             "MEMORY.md",
@@ -141,7 +201,7 @@ impl PromptSection for ToolHonestySection {
         Ok(
             "## CRITICAL: Tool Honesty\n\n\
              - NEVER fabricate, invent, or guess tool results. If a tool returns empty results, say \"No results found.\"\n\
-             - If a tool call fails, report the error — never make up data to fill the gap.\n\
+             - If a tool call fails, report the error \u{2014} never make up data to fill the gap.\n\
              - When unsure whether a tool call succeeded, ask the user rather than guessing."
                 .into(),
         )
@@ -303,9 +363,9 @@ impl PromptSection for ChannelMediaSection {
     fn build(&self, _ctx: &PromptContext<'_>) -> Result<String> {
         Ok("## Channel Media Markers\n\n\
             Messages from channels may contain media markers:\n\
-            - `[Voice] <text>` — The user sent a voice/audio message that has already been transcribed to text. Respond to the transcribed content directly.\n\
-            - `[IMAGE:<path>]` — An image attachment, processed by the vision pipeline.\n\
-            - `[Document: <name>] <path>` — A file attachment saved to the workspace."
+            - `[Voice] <text>` \u{2014} The user sent a voice/audio message that has already been transcribed to text. Respond to the transcribed content directly.\n\
+            - `[IMAGE:<path>]` \u{2014} An image attachment, processed by the vision pipeline.\n\
+            - `[Document: <name>] <path>` \u{2014} A file attachment saved to the workspace."
             .into())
     }
 }
@@ -332,7 +392,7 @@ fn inject_workspace_file(prompt: &mut String, workspace_dir: &Path, filename: &s
             if truncated.len() < trimmed.len() {
                 let _ = writeln!(
                     prompt,
-                    "\n\n[... truncated at {BOOTSTRAP_MAX_CHARS} chars — use `read` for full file]\n"
+                    "\n\n[... truncated at {BOOTSTRAP_MAX_CHARS} chars \u{2014} use `read` for full file]\n"
                 );
             } else {
                 prompt.push_str("\n\n");
@@ -729,5 +789,185 @@ mod tests {
             output.contains("bypass oversight"),
             "supervised should include 'bypass oversight' instructions"
         );
+    }
+
+    #[test]
+    fn personality_section_loads_existing_files() {
+        let workspace = std::env::temp_dir().join(format!(
+            "zeroclaw_personality_test_{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::write(workspace.join("SOUL.md"), "You are a helpful agent.").unwrap();
+        std::fs::write(workspace.join("IDENTITY.md"), "Name: ZeroClawAgent").unwrap();
+        std::fs::write(workspace.join("USER.md"), "Preferred language: English").unwrap();
+
+        let output = load_personality_files(&workspace);
+        assert!(output.contains("[Soul]"), "should contain Soul header");
+        assert!(
+            output.contains("You are a helpful agent."),
+            "should contain SOUL.md content"
+        );
+        assert!(
+            output.contains("[Identity]"),
+            "should contain Identity header"
+        );
+        assert!(
+            output.contains("Name: ZeroClawAgent"),
+            "should contain IDENTITY.md content"
+        );
+        assert!(
+            output.contains("[User Preferences]"),
+            "should contain User Preferences header"
+        );
+        assert!(
+            output.contains("Preferred language: English"),
+            "should contain USER.md content"
+        );
+
+        let soul_pos = output.find("[Soul]").unwrap();
+        let identity_pos = output.find("[Identity]").unwrap();
+        let user_pos = output.find("[User Preferences]").unwrap();
+        assert!(soul_pos < identity_pos, "Soul should come before Identity");
+        assert!(
+            identity_pos < user_pos,
+            "Identity should come before User Preferences"
+        );
+
+        let _ = std::fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn personality_section_skips_missing_files() {
+        let workspace = std::env::temp_dir().join(format!(
+            "zeroclaw_personality_missing_{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::write(workspace.join("SOUL.md"), "Core values here.").unwrap();
+
+        let output = load_personality_files(&workspace);
+        assert!(output.contains("[Soul]"), "should contain Soul header");
+        assert!(
+            output.contains("Core values here."),
+            "should contain SOUL.md content"
+        );
+        assert!(
+            !output.contains("[Identity]"),
+            "should NOT contain Identity header when file is missing"
+        );
+        assert!(
+            !output.contains("[User Preferences]"),
+            "should NOT contain User Preferences header when file is missing"
+        );
+
+        let _ = std::fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn personality_section_returns_empty_when_no_files() {
+        let workspace = std::env::temp_dir().join(format!(
+            "zeroclaw_personality_empty_{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace).unwrap();
+
+        let output = load_personality_files(&workspace);
+        assert!(
+            output.trim().is_empty(),
+            "should return empty string when no personality files exist"
+        );
+
+        let tools: Vec<Box<dyn Tool>> = vec![];
+        let ctx = PromptContext {
+            workspace_dir: &workspace,
+            model_name: "test-model",
+            tools: &tools,
+            skills: &[],
+            skills_prompt_mode: crate::config::SkillsPromptInjectionMode::Full,
+            identity_config: None,
+            dispatcher_instructions: "",
+            tool_descriptions: None,
+            security_summary: None,
+            autonomy_level: AutonomyLevel::Supervised,
+        };
+        let section_output = PersonalitySection.build(&ctx).unwrap();
+        assert!(
+            section_output.is_empty(),
+            "PersonalitySection should produce empty output when no files exist"
+        );
+
+        let _ = std::fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn personality_section_skips_empty_files() {
+        let workspace = std::env::temp_dir().join(format!(
+            "zeroclaw_personality_empty_file_{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::write(workspace.join("SOUL.md"), "   \n  ").unwrap();
+        std::fs::write(workspace.join("IDENTITY.md"), "Real content").unwrap();
+
+        let output = load_personality_files(&workspace);
+        assert!(
+            !output.contains("[Soul]"),
+            "should skip whitespace-only SOUL.md"
+        );
+        assert!(
+            output.contains("[Identity]"),
+            "should include non-empty IDENTITY.md"
+        );
+
+        let _ = std::fs::remove_dir_all(workspace);
+    }
+
+    #[test]
+    fn personality_section_prepended_in_system_prompt() {
+        let workspace = std::env::temp_dir().join(format!(
+            "zeroclaw_personality_order_{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace).unwrap();
+        std::fs::write(workspace.join("SOUL.md"), "Be kind and precise.").unwrap();
+
+        let tools: Vec<Box<dyn Tool>> = vec![Box::new(TestTool)];
+        let ctx = PromptContext {
+            workspace_dir: &workspace,
+            model_name: "test-model",
+            tools: &tools,
+            skills: &[],
+            skills_prompt_mode: crate::config::SkillsPromptInjectionMode::Full,
+            identity_config: None,
+            dispatcher_instructions: "",
+            tool_descriptions: None,
+            security_summary: None,
+            autonomy_level: AutonomyLevel::Supervised,
+        };
+
+        let prompt = SystemPromptBuilder::with_defaults().build(&ctx).unwrap();
+
+        let personality_pos = prompt.find("## Personality").unwrap();
+        let datetime_pos = prompt.find("## CRITICAL CONTEXT").unwrap();
+        let tools_pos = prompt.find("## Tools").unwrap();
+        assert!(
+            personality_pos < datetime_pos,
+            "Personality should come before DateTime"
+        );
+        assert!(
+            personality_pos < tools_pos,
+            "Personality should come before Tools"
+        );
+        assert!(
+            prompt.contains("[Soul]"),
+            "should contain Soul header in full prompt"
+        );
+        assert!(
+            prompt.contains("Be kind and precise."),
+            "should contain personality content in full prompt"
+        );
+
+        let _ = std::fs::remove_dir_all(workspace);
     }
 }
