@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 
 /// A single fact extracted from conversations.
@@ -209,7 +209,7 @@ impl StructuredMemory {
     pub fn count(&self) -> Result<usize> {
         let conn = self.conn.lock().unwrap();
         let count: i64 = conn.query_row("SELECT COUNT(*) FROM facts", [], |row| row.get(0))?;
-        Ok(count as usize)
+        Ok(usize::try_from(count).unwrap_or(0))
     }
 
     /// Prune lowest-value facts when over capacity.
@@ -238,7 +238,7 @@ impl StructuredMemory {
 
 /// Extract facts from text using heuristic confidence scoring.
 pub fn extract_facts(text: &str, min_confidence: f64) -> Vec<Fact> {
-    text.split(|c: char| matches!(c, '.' | '!' | '?' | '\n'))
+    text.split(['.', '!', '?', '\n'])
         .map(str::trim)
         .filter(|s| s.len() >= 20)
         .filter_map(|sentence| {

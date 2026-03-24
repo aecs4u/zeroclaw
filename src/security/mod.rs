@@ -76,10 +76,10 @@ pub use nevis::{NevisAuthProvider, NevisIdentity};
 #[allow(unused_imports)]
 pub use leak_detector::{LeakDetector, LeakResult};
 #[allow(unused_imports)]
-#[allow(unused_imports)]
 pub use path_validation::PathValidationSandbox;
 #[allow(unused_imports)]
 pub use prompt_guard::{GuardAction, GuardResult, PromptGuard};
+#[allow(unused_imports)]
 pub use workspace_boundary::{BoundaryVerdict, WorkspaceBoundary};
 
 /// Redact sensitive values for safe logging. Shows first 4 characters + "***" suffix.

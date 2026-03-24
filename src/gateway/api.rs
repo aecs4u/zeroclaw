@@ -2207,6 +2207,7 @@ pub async fn handle_api_session_messages(
 }
 
 /// GET /api/sessions/search?q=keyword&limit=N — search sessions by content
+#[allow(clippy::implicit_hasher)]
 pub async fn handle_api_sessions_search(
     State(state): State<AppState>,
     headers: HeaderMap,

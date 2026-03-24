@@ -53,7 +53,7 @@ pub struct TwitchConfig {
     pub oauth_token: String,
     /// Twitch application client ID (for Helix API).
     pub client_id: Option<String>,
-    /// Channels to join (e.g. ["#streamer1"]).
+    /// Channels to join (e.g. `["#streamer1"]`).
     pub channels: Vec<String>,
     /// Users allowed to interact. Empty = all.
     pub allowed_users: Vec<String>,

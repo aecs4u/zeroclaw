@@ -38,8 +38,7 @@ impl SecretsVault {
     }
 
     fn save(&self, secrets: &BTreeMap<String, String>) -> std::io::Result<()> {
-        let json = serde_json::to_string_pretty(secrets)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(secrets).map_err(std::io::Error::other)?;
         std::fs::write(&self.path, json)
     }
 

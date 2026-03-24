@@ -19,7 +19,7 @@ use super::traits::{Channel, ChannelMessage, SendMessage};
 use async_trait::async_trait;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 /// Bot Framework OAuth token endpoint.

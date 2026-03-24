@@ -507,7 +507,8 @@ mod tests {
         let content = &content;
         let results = layer.check_all(content);
         // At least one guard should fire (prompt injection or leak).
-        assert!(!results.is_empty() || true); // non-fatal: guards may be below threshold
+        // Non-fatal: guards may be below threshold; just verify the call doesn't panic.
+        let _ = results;
     }
 
     // ── policy helpers ────────────────────────────────────────────────────

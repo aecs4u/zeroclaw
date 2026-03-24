@@ -98,8 +98,8 @@ pub fn extract_paths_from_command(command: &str) -> Vec<PathBuf> {
 fn maybe_push_path(token: &str, home: &Path, paths: &mut Vec<PathBuf>) {
     if token.starts_with('/') {
         paths.push(PathBuf::from(token));
-    } else if token.starts_with("~/") {
-        paths.push(home.join(&token[2..]));
+    } else if let Some(rest) = token.strip_prefix("~/") {
+        paths.push(home.join(rest));
     }
 }
 
