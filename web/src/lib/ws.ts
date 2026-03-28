@@ -23,14 +23,14 @@ export interface WebSocketClientOptions {
 const DEFAULT_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 
-const SESSION_STORAGE_KEY = 'zeroclaw_session_id';
+export const SESSION_STORAGE_KEY = 'zeroclaw_session_id';
 
-/** Return a stable session ID, persisted in sessionStorage across reconnects. */
-function getOrCreateSessionId(): string {
-  let id = sessionStorage.getItem(SESSION_STORAGE_KEY);
+/** Return a stable session ID, persisted in localStorage across browser restarts. */
+export function getOrCreateSessionId(): string {
+  let id = localStorage.getItem(SESSION_STORAGE_KEY);
   if (!id) {
     id = generateUUID();
-    sessionStorage.setItem(SESSION_STORAGE_KEY, id);
+    localStorage.setItem(SESSION_STORAGE_KEY, id);
   }
   return id;
 }
